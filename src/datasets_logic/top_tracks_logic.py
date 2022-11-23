@@ -16,11 +16,12 @@ def obtain_session_id(all_plays_df: DataFrame, session_duration_min: int) -> Dat
     :return: DF with user_id, track_start_ts, full_track_name and session_id_ts
     """
 
-    # We could use two windows, one for the lag and another for the population of session_id_ts column.
-    # Benefit would be that the lag window only needs 2 rows per user for the window (current and previous)
-    # However, since that shuffle needs to happen anyway for the window population the session_id_ts
-    # (in which we need Window.unboundedPreceding, Window.currentRow, then we can define it once at reuse the window
-    # to simplify code)
+    windor_for_lag = (
+        Window
+        .partitionBy("user_id")
+        .orderBy(F.col("track_start_ts").asc())
+    )
+
     window_for_session_id = (
         Window
         .partitionBy("user_id")
@@ -32,7 +33,7 @@ def obtain_session_id(all_plays_df: DataFrame, session_duration_min: int) -> Dat
     # Could do it without storing tmp columns, but for readibility / debugging, the intermediate columns are kept
     all_plays_df_with_session = (
         all_plays_df
-        .withColumn("lagged_ts", F.lag(F.col("track_start_ts")).over(window_for_session_id))
+        .withColumn("lagged_ts", F.lag(F.col("track_start_ts")).over(windor_for_lag))
         .withColumn("mins_between_songs",
                     (F.col("track_start_ts").cast(T.LongType()) - F.col("lagged_ts").cast(T.LongType())) / 60)
         .withColumn(
@@ -43,14 +44,14 @@ def obtain_session_id(all_plays_df: DataFrame, session_duration_min: int) -> Dat
                 # First ever played track by a user
                 F.col("mins_between_songs").isNull(), F.col("track_start_ts")
             ).otherwise(
-                F.lit(None).cast(T.StringType()))
+                F.lit(None).cast(T.TimestampType()))
         )
         # Populate session id for tracks that don't start a session
         # Tracks that start a session will use the value of session_id_ts, as it is the max until that row
         .withColumn("session_id_ts", F.max("session_id_ts").over(window_for_session_id))
         .selectExpr(
             "user_id",
-            "track_start",
+            "track_start_ts",
             "full_track_name",
             "session_id_ts"
         )
@@ -80,8 +81,7 @@ def obtain_top_session(df_with_session: DataFrame, num_sessions_to_keep: int) ->
 def obtain_most_popular_tracks(
         df_tracks_played: DataFrame,
         df_top_session: DataFrame,
-        num_tracks_to_keep: int,
-        int) -> DataFrame:
+        num_tracks_to_keep: int) -> DataFrame:
     """
 
     :param df_tracks_played: output df of obtain_session_id
@@ -105,13 +105,13 @@ def obtain_most_popular_tracks(
             F.count("*").alias("track_plays")
         )
         .orderBy(F.col("track_plays").desc())
-        .limit(10)
+        .limit(num_tracks_to_keep)
     )
 
     top_tracks = (
         top_tracks
-        .withColumn("artist_name", F.split(F.col("full_track_name"), "--").getItem(0))
-        .withColumn("track_name", F.split(F.col("full_track_name"), "--").getItem(1))
+        .withColumn("artist_name", F.split(F.col("full_track_name"), "--/").getItem(0))
+        .withColumn("track_name", F.split(F.col("full_track_name"), "--/").getItem(1))
         .selectExpr(
             "artist_name",
             "track_name",
