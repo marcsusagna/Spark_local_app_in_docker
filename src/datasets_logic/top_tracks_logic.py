@@ -1,9 +1,71 @@
 from pyspark.sql import (
     DataFrame,
+    SparkSession,
     functions as F,
     types as T,
     Window
 )
+# Constants
+TIMESTAMP_FORMAT = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+ARTIST_TRACK_DELIMITER = "--/"
+SESSION_THRESHOLD_MINUTES = 20
+NUM_TOP_SESSIONS = 20
+NUM_TOP_TRACKS = 10
+
+# Assumptions on input dataframe. A violation invalidates the output.
+# These assumptions have been checked for the current input dataframe, but if this was an action done repetitively
+# in a pipeline, this should be monitored as data expectations.
+# 1) user_id (_c0) and track_start (_c1) constitute a PK: non-null and unique
+# 2) track_start (_c1) always abides with TIMESTAMP_FORMAT
+# 3) Columns (_c0) and (_c1) don't have quotes to be scaped, hence (_c3) can't be null.
+#   This is reasonable (they are not free text variable), no need to monitor
+# 4) Artist name (_c3) and track_name (_c5) Don't have ARTIST_TRACK_DELIMITER in them.
+#   Issue: If they do the track_name in the top songs picked can be
+
+# Issues / Improvements:
+# 1) Couldn't scape double single quotes when reading df. As a consequence, if the song in that row was to be picked,
+#   the track_name would be meaningless. It only happens in one row, so that song has almost chance to make it to the top.
+
+def read_input_file(spark_session: SparkSession, file_path: str):
+    input_df = (
+        spark_session
+        .read
+        .option("quote", "\"")
+        .option("escape", "\'")
+        .csv(file_path, sep="\t", header=False)
+    )
+    return input_df
+
+def process_input_file(input_df: DataFrame) -> DataFrame:
+    """
+    Obtain target schema for further processing
+    :param input_df: Onboarded input file
+    :return:
+    """
+    # Why are we creating column full_track_name?
+    # Best would be to use track_id to identify song counts in the last step, however, 11% are null (and not due to parsing)
+    # Therefore, we create full_track_name for the following reasons:
+    # 1) Be able to better identify the track in case it is picked as top 10 (two artists can have the same song name)
+    # 2) Remove null values in track_name due to quotes in column artist_name (_c3)
+
+    # Dropping columns that are useless to reduce data shuffling
+    input_df = (
+        input_df
+        .withColumn(
+            "full_track_name",
+            F.concat_ws(ARTIST_TRACK_DELIMITER, F.col("_c3"), F.coalesce(F.col("_c5"), F.lit("")))
+        )
+        # We are explicit with the format to ensure input comes in a constant format
+        .withColumn("track_start_ts", F.to_timestamp(F.col("_c1"), TIMESTAMP_FORMAT))
+        .selectExpr([
+            "_c0 as user_id",
+            "track_start_ts",
+            "full_track_name"
+        ])
+    )
+
+    return input_df
+
 def obtain_session_id(all_plays_df: DataFrame, session_duration_min: int) -> DataFrame:
     """
     Compare each track played with the previoulsy played track for each user. Use the minutes between the tracks
@@ -29,7 +91,7 @@ def obtain_session_id(all_plays_df: DataFrame, session_duration_min: int) -> Dat
         .rowsBetween(Window.unboundedPreceding, Window.currentRow)
     )
 
-    # Create session_id for tracks that initiate a new session
+    # Create session_id_ts for tracks that initiate a new session
     # Could do it without storing tmp columns, but for readibility / debugging, the intermediate columns are kept
     all_plays_df_with_session = (
         all_plays_df
@@ -110,8 +172,9 @@ def obtain_most_popular_tracks(
 
     top_tracks = (
         top_tracks
-        .withColumn("artist_name", F.split(F.col("full_track_name"), "--/").getItem(0))
-        .withColumn("track_name", F.split(F.col("full_track_name"), "--/").getItem(1))
+        .withColumn("split_name", F.split(F.col("full_track_name"), ARTIST_TRACK_DELIMITER))
+        .withColumn("artist_name", F.col("split_name").getItem(0))
+        .withColumn("track_name", F.col("split_name").getItem(1))
         .selectExpr(
             "artist_name",
             "track_name",
