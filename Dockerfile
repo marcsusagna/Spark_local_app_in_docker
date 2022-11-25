@@ -20,9 +20,9 @@ RUN mv "spark-$SPARK_VERSION-bin-hadoop$HADOOP_VERSION" /usr/local
 WORKDIR /usr/local
 
 # Configure spark
-ENV SPARK_HOME=/usr/local/spark
+ENV SPARK_HOME="/usr/local/spark-$SPARK_VERSION-bin-hadoop$HADOOP_VERSION"
 ENV PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
-RUN ln -s "spark-$SPARK_VERSION-bin-$HADOOP_VERSION" spark
+
 
 # Install python libraries
 COPY requirements.txt ./
