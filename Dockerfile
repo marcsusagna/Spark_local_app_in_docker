@@ -19,6 +19,7 @@ RUN mv spark-3.2.2-bin-hadoop3.2 /usr/local
 WORKDIR /usr/local
 
 # Configure spark
+
 ENV SPARK_HOME=/usr/local/spark
 ENV PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
 RUN ln -s spark-3.2.2-bin-hadoop3.2 spark
@@ -33,12 +34,3 @@ RUN pip install -r requirements.txt
 
 WORKDIR /spark_app
 
-COPY spark_main.py ./
-#CMD ["${SPARK_HOME}/bin/spark-submit", "./spark_main.py"]
-#CMD python ./spark_main.py
-CMD /usr/local/spark-3.2.2-bin-hadoop3.2/bin/spark-submit ./spark_main.py
-#CMD ls /usr/local/spark-3.2.2-bin-hadoop3.2/bin
-
-#COPY main.py ./
-#CMD ["python", "./main.py"]
-#CMD ["python", "./main.py"]
