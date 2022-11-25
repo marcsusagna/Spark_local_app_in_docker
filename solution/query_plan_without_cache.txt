@@ -1,0 +1,37 @@
+== Physical Plan ==
+AdaptiveSparkPlan isFinalPlan=false
++- Project [split_name#113[0] AS artist_name#117, split_name#113[1] AS track_name#122, track_plays#110L]
+   +- Project [track_plays#110L, split(full_track_name#29, --/, -1) AS split_name#113]
+      +- TakeOrderedAndProject(limit=10, orderBy=[track_plays#110L DESC NULLS LAST], output=[full_track_name#29,track_plays#110L])
+         +- HashAggregate(keys=[full_track_name#29], functions=[count(1)])
+            +- Exchange hashpartitioning(full_track_name#29, 200), ENSURE_REQUIREMENTS, [plan_id=836]
+               +- HashAggregate(keys=[full_track_name#29], functions=[partial_count(1)])
+                  +- Project [full_track_name#29]
+                     +- BroadcastHashJoin [user_id#47, session_id_ts#70], [user_id#100, session_id_ts#98], Inner, BuildRight, false
+                        :- Project [user_id#47, full_track_name#29, session_id_ts#70]
+                        :  +- Filter isnotnull(session_id_ts#70)
+                        :     +- Window [max(session_id_ts#62) windowspecdefinition(user_id#47, track_start_ts#38 ASC NULLS FIRST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS session_id_ts#70], [user_id#47], [track_start_ts#38 ASC NULLS FIRST]
+                        :        +- Project [user_id#47, track_start_ts#38, full_track_name#29, CASE WHEN (mins_between_songs#56 > 20.0) THEN track_start_ts#38 WHEN isnull(mins_between_songs#56) THEN track_start_ts#38 END AS session_id_ts#62]
+                        :           +- Project [user_id#47, track_start_ts#38, full_track_name#29, (cast((cast(track_start_ts#38 as bigint) - cast(lagged_ts#51 as bigint)) as double) / 60.0) AS mins_between_songs#56]
+                        :              +- Window [lag(track_start_ts#38, -1, null) windowspecdefinition(user_id#47, track_start_ts#38 ASC NULLS FIRST, specifiedwindowframe(RowFrame, -1, -1)) AS lagged_ts#51], [user_id#47], [track_start_ts#38 ASC NULLS FIRST]
+                        :                 +- Sort [user_id#47 ASC NULLS FIRST, track_start_ts#38 ASC NULLS FIRST], false, 0
+                        :                    +- Exchange hashpartitioning(user_id#47, 200), ENSURE_REQUIREMENTS, [plan_id=811]
+                        :                       +- Project [_c0#17 AS user_id#47, gettimestamp(_c1#18, yyyy-MM-dd'T'HH:mm:ss'Z', TimestampType, Some(Europe/Paris), false) AS track_start_ts#38, concat_ws(--/, _c3#20, coalesce(_c5#22, )) AS full_track_name#29]
+                        :                          +- Filter isnotnull(_c0#17)
+                        :                             +- FileScan csv [_c0#17,_c1#18,_c3#20,_c5#22] Batched: false, DataFilters: [isnotnull(_c0#17)], Format: CSV, Location: InMemoryFileIndex(1 paths)[file:/C:/Users/marcs/Documents/projects/spark_local_app/data/userid-ti..., PartitionFilters: [], PushedFilters: [IsNotNull(_c0)], ReadSchema: struct<_c0:string,_c1:string,_c3:string,_c5:string>
+                        +- BroadcastExchange HashedRelationBroadcastMode(List(input[0, string, false], input[1, timestamp, false]),false), [plan_id=831]
+                           +- Filter (isnotnull(user_id#100) AND isnotnull(session_id_ts#98))
+                              +- TakeOrderedAndProject(limit=20, orderBy=[session_length#86L DESC NULLS LAST], output=[user_id#100,session_id_ts#98])
+                                 +- HashAggregate(keys=[user_id#100, session_id_ts#98], functions=[count(1)])
+                                    +- HashAggregate(keys=[user_id#100, session_id_ts#98], functions=[partial_count(1)])
+                                       +- Project [user_id#100, session_id_ts#98]
+                                          +- Window [max(session_id_ts#62) windowspecdefinition(user_id#100, track_start_ts#38 ASC NULLS FIRST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS session_id_ts#98], [user_id#100], [track_start_ts#38 ASC NULLS FIRST]
+                                             +- Project [user_id#100, track_start_ts#38, CASE WHEN (mins_between_songs#56 > 20.0) THEN track_start_ts#38 WHEN isnull(mins_between_songs#56) THEN track_start_ts#38 END AS session_id_ts#62]
+                                                +- Project [user_id#100, track_start_ts#38, (cast((cast(track_start_ts#38 as bigint) - cast(lagged_ts#51 as bigint)) as double) / 60.0) AS mins_between_songs#56]
+                                                   +- Window [lag(track_start_ts#38, -1, null) windowspecdefinition(user_id#100, track_start_ts#38 ASC NULLS FIRST, specifiedwindowframe(RowFrame, -1, -1)) AS lagged_ts#51], [user_id#100], [track_start_ts#38 ASC NULLS FIRST]
+                                                      +- Sort [user_id#100 ASC NULLS FIRST, track_start_ts#38 ASC NULLS FIRST], false, 0
+                                                         +- Exchange hashpartitioning(user_id#100, 200), ENSURE_REQUIREMENTS, [plan_id=819]
+                                                            +- Project [_c0#92 AS user_id#100, gettimestamp(_c1#93, yyyy-MM-dd'T'HH:mm:ss'Z', TimestampType, Some(Europe/Paris), false) AS track_start_ts#38]
+                                                               +- FileScan csv [_c0#92,_c1#93] Batched: false, DataFilters: [], Format: CSV, Location: InMemoryFileIndex(1 paths)[file:/C:/Users/marcs/Documents/projects/spark_local_app/data/userid-ti..., PartitionFilters: [], PushedFilters: [], ReadSchema: struct<_c0:string,_c1:string>
+
+

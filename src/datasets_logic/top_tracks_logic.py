@@ -13,25 +13,25 @@ SESSION_THRESHOLD_MINUTES = 20
 NUM_TOP_SESSIONS = 20
 NUM_TOP_TRACKS = 10
 
-# Assumptions on input dataframe. A violation may invalidate the output.
-# These assumptions have been checked for the current input dataframe, but if this was an action done repetitively
-# in a pipeline, this should be monitored as data expectations.
-# 1) user_id (_c0) and track_start (_c1) constitute a PK: non-null and unique.
-#   - If some values are null, this could invalidate the transformation --> Need to fail check if check doesn't pass
-#   - If they are not unique, the computation would still be correct,
-#   but it could indicate issues in the sourced dataset --> No need to fail if check doesn't pass
-#   We assume nulls don't have a coding (they just appear as null), this is based on initial exploration
-# 2) track_start (_c1) always abides with TIMESTAMP_FORMAT
-# 3) Columns (_c0) and (_c1) don't have quotes to be scaped, hence (_c3) can't be null.
-#   This is reasonable (they are not free text variable), no need to monitor
-# 4) Artist name (_c3) and track_name (_c5) Don't have ARTIST_TRACK_DELIMITER in them.
-#   Issue: If they do the track_name in the top songs picked can be
+# Assumptions on input dataframe that will need to be monitored:
+# 1) user_id (_c0) and track_start (_c1) are not null. Check behavior: Fail
+# (meaningless window function, could aggregate over users for which user id is null)
+# 2) track_start (_c1) always abides with TIMESTAMP_FORMAT. Check behavior: Fail (tracks attached to wrong session)
+# 3) Columns (_c0) and (_c1) don't have quotes to be scaped because they are not free text, hence (_c3) can't be null
+# No need to monitor.
+# 4) Combination of user_id and track_start_timestamp should be unique. Check behavior: Warn. Doesn't invalidate logic
+# but raises a warning on the quality of the feed
+# 5) Artist name (_c3) and track_name (_c5) Don't have ARTIST_TRACK_DELIMITER in them. Check behavior: warn
+# A violation would just make the track_name harder to retrieve.
 
-# Issues / Improvements:
-# 1) Couldn't scape double single quotes when reading df. As a consequence, if the song in that row was to be picked,
-#   the track_name would be meaningless. It only happens in one row, so that song has almost chance to make it to the top.
 
 def read_input_file(spark_session: SparkSession, file_path: str):
+    """
+    scaping needs to be improved
+    :param spark_session:
+    :param file_path:
+    :return:
+    """
     input_df = (
         spark_session
         .read
@@ -40,6 +40,7 @@ def read_input_file(spark_session: SparkSession, file_path: str):
         .csv(file_path, sep=INPUT_FILE_DELIMITER, header=False)
     )
     return input_df
+
 
 def process_input_file(input_df: DataFrame) -> DataFrame:
     """
@@ -71,6 +72,7 @@ def process_input_file(input_df: DataFrame) -> DataFrame:
 
     return input_df
 
+
 def obtain_session_id(all_plays_df: DataFrame, session_duration_min: int) -> DataFrame:
     """
     Compare each track played with the previoulsy played track for each user. Use the minutes between the tracks
@@ -83,7 +85,7 @@ def obtain_session_id(all_plays_df: DataFrame, session_duration_min: int) -> Dat
     :return: DF with user_id, track_start_ts, full_track_name and session_id_ts
     """
 
-    windor_for_lag = (
+    window_for_lag = (
         Window
         .partitionBy("user_id")
         .orderBy(F.col("track_start_ts").asc())
@@ -100,7 +102,7 @@ def obtain_session_id(all_plays_df: DataFrame, session_duration_min: int) -> Dat
     # Could do it without storing tmp columns, but for readibility / debugging, the intermediate columns are kept
     all_plays_df_with_session = (
         all_plays_df
-        .withColumn("lagged_ts", F.lag(F.col("track_start_ts")).over(windor_for_lag))
+        .withColumn("lagged_ts", F.lag(F.col("track_start_ts")).over(window_for_lag))
         .withColumn("mins_between_songs",
                     (F.col("track_start_ts").cast(T.LongType()) - F.col("lagged_ts").cast(T.LongType())) / 60)
         .withColumn(
@@ -113,7 +115,7 @@ def obtain_session_id(all_plays_df: DataFrame, session_duration_min: int) -> Dat
             ).otherwise(
                 F.lit(None).cast(T.TimestampType()))
         )
-        # Populate session id for tracks that don't start a session
+        # Populate session id ts for tracks that don't start a session
         # Tracks that start a session will use the value of session_id_ts, as it is the max until that row
         .withColumn("session_id_ts", F.max("session_id_ts").over(window_for_session_id))
         .selectExpr(
@@ -126,9 +128,10 @@ def obtain_session_id(all_plays_df: DataFrame, session_duration_min: int) -> Dat
 
     return all_plays_df_with_session
 
+
 def obtain_top_session(df_with_session: DataFrame, num_sessions_to_keep: int) -> DataFrame:
     """
-    Obtain top longest num_sessions_to_keep
+    Obtain top longest num_sessions_to_keep by counting number of entries per session
 
     :param df_with_session: df with all tracks played and the necessary columns user_id and session_id_ts
     :param num_sessions_to_keep: how many sessions to be considered top
@@ -145,17 +148,20 @@ def obtain_top_session(df_with_session: DataFrame, num_sessions_to_keep: int) ->
     )
     return top_sessions
 
+
 def obtain_most_popular_tracks(
         df_tracks_played: DataFrame,
         df_top_session: DataFrame,
         num_tracks_to_keep: int) -> DataFrame:
     """
+    Count track plays within the top longest sessions
 
     :param df_tracks_played: output df of obtain_session_id
     :param df_top_session: output df of obtain_top_session
     :param num_tracks_to_keep: number of tracks considered the most popular
     :return: DataFrame with 3 columns (artist_name, track_name and number of times a song was played) for the top songs
     """
+    # Broadcast join since df_top_session is most likely below threshold
     tracks_in_top_sessions = (
         df_tracks_played
         .join(

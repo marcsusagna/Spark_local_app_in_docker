@@ -6,6 +6,8 @@ from src.datasets_logic.top_tracks_logic import (
 )
 
 pytest.mark.usefixtures("spark_session", "input_df", "top_sessions_expected_df", "top_tracks_expected_df")
+
+
 class TestTopTracksLogic:
     """
     Test Suite for the logic to compute the top tracks out of the longest sessions

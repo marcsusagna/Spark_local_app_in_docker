@@ -2,7 +2,6 @@ import pytest
 import datetime
 from pyspark.sql import(
     SparkSession,
-    functions as F,
     types as T
 )
 
