@@ -6,4 +6,6 @@ def write_to_disk(df: DataFrame, output_dir: str, file_name: str, num_output_par
     :param output_dir:
     :return: None
     """
-    df.repartition(num_output_partitions).write.option("header", True).option("delimiter", "\t").csv(output_dir+file_name)
+    df.repartition(num_output_partitions).write.\
+        option("header", True).option("delimiter", "\t").mode("overwrite")\
+        .csv(output_dir+file_name)

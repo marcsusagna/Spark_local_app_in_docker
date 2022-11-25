@@ -23,4 +23,7 @@ class TestTopTracksLogic:
         plays_with_session = obtain_session_id(input_df, session_duration_min=20)
         top_sessions = obtain_top_session(plays_with_session, num_sessions_to_keep=3)
         top_tracks = obtain_most_popular_tracks(plays_with_session, top_sessions, 2)
+        # Careful: The count is forced to be a longType. If this was double, due to float precision and
+        # randomness of execution order in a distributed environment (which executor finishes first?)
+        # Then this test would fail if we don't add some acceptance bounds
         assert top_tracks.collect() == top_tracks_expected_df.collect()

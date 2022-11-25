@@ -7,15 +7,20 @@ from pyspark.sql import (
 )
 # Constants
 TIMESTAMP_FORMAT = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+INPUT_FILE_DELIMITER = "\t"
 ARTIST_TRACK_DELIMITER = "--/"
 SESSION_THRESHOLD_MINUTES = 20
 NUM_TOP_SESSIONS = 20
 NUM_TOP_TRACKS = 10
 
-# Assumptions on input dataframe. A violation invalidates the output.
+# Assumptions on input dataframe. A violation may invalidate the output.
 # These assumptions have been checked for the current input dataframe, but if this was an action done repetitively
 # in a pipeline, this should be monitored as data expectations.
-# 1) user_id (_c0) and track_start (_c1) constitute a PK: non-null and unique
+# 1) user_id (_c0) and track_start (_c1) constitute a PK: non-null and unique.
+#   - If some values are null, this could invalidate the transformation --> Need to fail check if check doesn't pass
+#   - If they are not unique, the computation would still be correct,
+#   but it could indicate issues in the sourced dataset --> No need to fail if check doesn't pass
+#   We assume nulls don't have a coding (they just appear as null), this is based on initial exploration
 # 2) track_start (_c1) always abides with TIMESTAMP_FORMAT
 # 3) Columns (_c0) and (_c1) don't have quotes to be scaped, hence (_c3) can't be null.
 #   This is reasonable (they are not free text variable), no need to monitor
@@ -32,7 +37,7 @@ def read_input_file(spark_session: SparkSession, file_path: str):
         .read
         .option("quote", "\"")
         .option("escape", "\'")
-        .csv(file_path, sep="\t", header=False)
+        .csv(file_path, sep=INPUT_FILE_DELIMITER, header=False)
     )
     return input_df
 
