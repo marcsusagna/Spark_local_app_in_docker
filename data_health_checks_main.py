@@ -17,11 +17,6 @@ spark_session = (
     .appName("Data Health App")
     .getOrCreate()
 )
-
-print(spark_session.sparkContext)
-print(spark_session.sparkContext.getConf().get("spark.executor.memory"))
-print(spark_session.sparkContext.master)
-
 # Silence logs to be able to see checks results
 spark_session.sparkContext.setLogLevel("OFF")
 
