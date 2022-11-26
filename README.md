@@ -19,16 +19,23 @@ cd Spark_local_app_in_docker
    1. Go to http://ocelma.net/MusicRecommendationDataset/lastfm-1K.html
    2. Download lastfm-dataset-1K.tar.gz
    3. Move file into the folder ./data (just created when cloning the repo) from your current working directory
-   4. Decompress into the same ./data folder
+   4. Decompress into the same ./data folder, making sure that the file "userid-timestamp-artid-artname-traid-traname.tsv"
+   is in the .data/folder
 
-6. Build the docker image with:
+6. Build the docker image with (might need to use superuser rights / sudo)
 
 docker image build -t spark_local_app:0.1.1 ./
 
 7. Run a container based on the image with the following command. 
-**Important** replace {abs/path/to/working_dir/} with the working directory defined in step 2
+**Important** replace {abs/path/to/working_dir/} with the working directory defined in steps 2 and 4:
 
 docker run -dit --name my_spark_container -v {abs/path/to/working_dir/}:/spark_app/ spark_local_app:0.1.1
+
+For example if on step 2 I used directory "/home/user_name/Documents/projects/Spark_local_app_in_docker/", then:
+
+docker run -dit --name my_spark_container -v /home/user_name/Documents/projects/Spark_local_app_in_docker/:/spark_app/ spark_local_app:0.1.1
+
+
 8. Run unit tests by executing:
 
 docker exec my_spark_container pytest
@@ -97,7 +104,7 @@ I've split this section in 3 parts that I would fine interesting to investigate 
 
 **Optimization**: 
 
-In the folder solution you'll find two query plans attached and two .png with a screenshot on
+In the folder ./solution you'll find two query plans attached and two .png with a screenshot on
 disk spillage for each case. I wanted to reuse the computation right before computing the top sessions
 and provided evidence that caching helps on that (see query plans). The intention of the query plan is 
 to justify some decisions on how I designed the solution: The windows reuse the same shuffle on user_id
