@@ -6,37 +6,45 @@ Solution file with the top 10 tracks is under folder "solution".
 
 Steps: 
 1. Install docker in your machine
-2. Change your working directory to desired location
-3. Clone the following repository: https://github.com/marcsusagna/Spark_local_app_in_docker.git
-4. Get the data: 
+2. Change your working directory to desired location where you want to bring the repository.
+3. Clone the repository to your working directory.
+
+git clone https://github.com/marcsusagna/Spark_local_app_in_docker.git
+
+4. Change working directory within the repository by:
+
+cd Spark_local_app_in_docker
+
+5. Get the data: 
    1. Go to http://ocelma.net/MusicRecommendationDataset/lastfm-1K.html
    2. Download lastfm-dataset-1K.tar.gz
    3. Move file into the folder ./data (just created when cloning the repo) from your current working directory
    4. Decompress into the same ./data folder
-5. Open up a shell and run the next steps 
-6. Build the docker image with:
+
+6. Open up a shell and run the next steps 
+7. Build the docker image with:
 
 docker image build -t spark_local_app:0.1.1 ./
 
-7. Run a container based on the image with the following command. 
+8. Run a container based on the image with the following command. 
 **Important** replace {abs/path/to/working_dir/} with the working directory defined in step 2
 
 docker run -dit --name my_spark_container -v {abs/path/to/working_dir/}:/spark_app/ spark_local_app:0.1.1
-8. Run unit tests by executing:
+9. Run unit tests by executing:
 
 docker exec my_spark_container pytest
 
-9. Run data health checks to validate data assumptions by executing: Feel free to change spark parameters depending
+10. Run data health checks to validate data assumptions by executing: Feel free to change spark parameters depending
 on the machine you are going to run this
 
 docker exec my_spark_container spark-submit --master local[4] --executor-memory 2g ./data_health_checks_main.py  
 
-10. Finally, execute the application solving the required task: Feel free to change spark parameters depending
+11. Finally, execute the application solving the required task: Feel free to change spark parameters depending
 on the machine you are going to run this
 
-docker exec my_spark_container spark-submit --master local[4] --executor-memory 2g ./main.py 
+docker exec my_spark_container spark-submit --master local[4] --executor-memory 2g ./main.py
 
-11. As a result, you'll have in the folder output two files
+12. As a result, you'll have in the folder output two files
     1. A folder called top_tracks with a csv inside with the answer
     2. a .txt file with the query plan of to obtain such result
 
