@@ -9,48 +9,46 @@ Steps:
 2. Change your working directory to desired location where you want to bring the repository.
 3. Clone the repository to your working directory.
 
-git clone https://github.com/marcsusagna/Spark_local_app_in_docker.git
+$ git clone https://github.com/marcsusagna/Spark_local_app_in_docker.git
 
 4. Change working directory within the repository by:
 
-cd Spark_local_app_in_docker
+$ cd Spark_local_app_in_docker
 
 5. Get the data: 
    1. Go to http://ocelma.net/MusicRecommendationDataset/lastfm-1K.html
-   2. Download lastfm-dataset-1K.tar.gz
-   3. Move file into the folder ./data (just created when cloning the repo) from your current working directory
-   4. Decompress into the same ./data folder, making sure that the file "userid-timestamp-artid-artname-traid-traname.tsv"
-   is in the .data/folder
+   2. Download lastfm-dataset-1K.tar.gz, decompress it.
+   3. Move the file "userid-timestamp-artid-artname-traid-traname.tsv" to the ./data folder in the Spark_local_app_in_docker directory
 
 6. Build the docker image with (might need to use superuser rights / sudo)
 
-docker image build -t spark_local_app:0.1.1 ./
+$ docker image build -t spark_local_app:0.1.1 ./
 
 7. Run a container based on the image with the following command. 
 **Important** replace {abs/path/to/working_dir/} with the working directory defined in steps 2 and 4:
 
-docker run -dit --name my_spark_container -v {abs/path/to/working_dir/}:/spark_app/ spark_local_app:0.1.1
+$ docker run -dit --name my_spark_container -v {abs/path/to/working_dir/}:/spark_app/ spark_local_app:0.1.1
 
 For example if on step 2 I used directory "/home/user_name/Documents/projects/Spark_local_app_in_docker/", then:
 
-docker run -dit --name my_spark_container -v /home/user_name/Documents/projects/Spark_local_app_in_docker/:/spark_app/ spark_local_app:0.1.1
+$ docker run -dit --name my_spark_container -v /home/user_name/Documents/projects/Spark_local_app_in_docker/:/spark_app/ spark_local_app:0.1.1
 
 
 8. Run unit tests by executing:
 
-docker exec my_spark_container pytest
+$ docker exec my_spark_container pytest
 
 9. Run data health checks to validate data assumptions by executing: Feel free to change spark parameters depending
 on the machine you are going to run this
 
-docker exec my_spark_container spark-submit --master local[4] --executor-memory 2g ./data_health_checks_main.py  
+$ docker exec my_spark_container spark-submit --master local[4] --executor-memory 2g ./data_health_checks_main.py  
 
 10. Finally, execute the application solving the required task: Feel free to change spark parameters depending
 on the machine you are going to run this
 
-docker exec my_spark_container spark-submit --master local[4] --executor-memory 2g ./main.py
+$ docker exec my_spark_container spark-submit --master local[4] --executor-memory 2g ./main.py
 
-11. As a result, you'll have in the folder output two files
+11. As a result, you'll have in the folder ./output two files
     1. A folder called top_tracks with a csv inside with the answer
     2. a .txt file with the query plan to obtain such result
 
@@ -65,7 +63,7 @@ then one of them is taking arbitrarily. If ties want to be kept, a solution base
 on an empty Window partition on the session length dataset. Note that this decision can change the final result.
 The current solution may lead to non-deterministic result at expense of better performance since
 orderBy + limit does precomputations before shuffling (like a combiner in MapReduce), instead a Window function shuffles all data first.
-- Length of a session is defined by total number of tracks played, not unique tracks played
+- Length of a session is defined by total number of tracks played, not unique tracks played.
 
 ## Data assumptions for the proposed solution
 
@@ -83,7 +81,7 @@ since one knows what assumptions are violated thanks to exploratory data analysi
 That's why on the data health run we would except if that's the case.
 2. Column track_start_timestamp is correctly formatted: Otherwise we would have nulls when parsing it from string
 and those rows would be attached to the last session for the user. Since this would lead to incorrect results,
-we raise an exception 
+we raise an exception. 
 3. Combination of user_id and track_start_timestamp should be unique. This doesn't invalidate the solution, 
 as the two plays would be considered part of the same session. However, from a conceptual point of view
 one would expect them to constitute a PK (together with assumption 1). In fact, in this dataset these 
@@ -127,9 +125,9 @@ Due to limited time and impact (I've checked, it doesn't repeat enough to be a c
 In this section I discuss things I would do if this was part of a data pipeline: 
 
 1. Scalability: Check what happens to the transform if more rows are onboarded (explode on a newly created
-array column with length as the scalability factor and replace track_start_timestamp by randomly generated timestamps)
-2. track_id: Contact data source to see if we can get a track id for all songs (avoid concatenation workaround)
-3. Normalize tables depending on the uses cases: User, songs, sessions... Why? Could use track_ids and then
+array column with length as the scalability factor and replace track_start_timestamp by randomly generated timestamps).
+2. track_id: Contact data source to see if we can get a track id for all songs (avoid concatenation workaround).
+3. Normalize tables depending on the uses cases: User, songs, sessions... Why? Could use track_ids and then.
 join top tracks to songs table to find name etc (less data to shuffle as track_id would be smaller than free text fields!)
 4. Make the transform work as if this data grows daily and every day we need to compute the all-time top 10 songs. Lots of computation
 could be reused from one day to another.
